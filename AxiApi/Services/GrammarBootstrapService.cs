@@ -1,3 +1,4 @@
+using AxiApi.Observability;
 using System;
 using ARMCommon.Interface;
 using AxExtend.Interface;
@@ -55,7 +56,9 @@ public class GrammarBootstrapService: IGrammarBootstrapService
 
 
 
-    var redisConnected = await _axExtend.OpenRedisConnectionAsync(appname);
+    var redisConnected = await AxiTelemetry.DependencyAsync("cache", "connect", () => _axExtend.OpenRedisConnectionAsync(appname));
+            var fallback = !redisConnected;
+            if (forceRefresh) AxiTelemetry.Cache("grammar", "force_refresh");
             RedisKey[] redisKeys = { 
                 GrammarCacheKey
             }; 
@@ -68,14 +71,15 @@ public class GrammarBootstrapService: IGrammarBootstrapService
                 {
                     if (forceRefresh)
                     {
-                        await redisCache.KeysDeleteAsync(redisKeys); 
+                        await AxiTelemetry.DependencyAsync("cache", "invalidate", () => redisCache.KeysDeleteAsync(redisKeys));
                     }
-                    string cacheGrammarString = await redisCache.StringGetAsync(GrammarCacheKey);
+                    string cacheGrammarString = await AxiTelemetry.DependencyAsync("cache", "read", () => redisCache.StringGetAsync(GrammarCacheKey));
                     if (!string.IsNullOrEmpty(cacheGrammarString))
                            cachedGrammar = JsonConvert.DeserializeObject<GrammarCacheDTO>(cacheGrammarString);
                 }
                 catch (RedisException ex)
                 {
+                    fallback = true;
                     _logger.LogWarning(
                         ex,
                         "Bootstrap: Redis cache fetch failed. Falling back to Database."
@@ -87,6 +91,7 @@ public class GrammarBootstrapService: IGrammarBootstrapService
 
             if (cachedGrammar is not null)
             {
+                AxiTelemetry.Cache("grammar", "hit");
                 _logger.LogDebug("Bootstrap: Cache Hit. Building grammar from memory.");
 
                 grammar = GrammarBuilder.Build(cachedGrammar.Commands, cachedGrammar.Prompts);
@@ -95,6 +100,7 @@ public class GrammarBootstrapService: IGrammarBootstrapService
             }
 
             _logger.LogInformation("Bootstrap: Cache Miss. Fetching from Database...");
+            if (redisConnected && !forceRefresh && !fallback) AxiTelemetry.Cache("grammar", "miss");
 
             
 
@@ -119,10 +125,12 @@ public class GrammarBootstrapService: IGrammarBootstrapService
                 try
                 {
 
-                    await redisCache?.StringSetAsync(GrammarCacheKey, JsonConvert.SerializeObject(cacheDTO), 7200);
+                    var written = await AxiTelemetry.DependencyAsync("cache", "write", () => redisCache!.StringSetAsync(GrammarCacheKey, JsonConvert.SerializeObject(cacheDTO), 7200));
+                    if (!written) AxiTelemetry.Cache("grammar", "write_failure");
                 }
                 catch (RedisException ex)
                 {
+                    AxiTelemetry.Cache("grammar", "write_failure");
                     _logger.LogWarning(ex, "Bootstrap: Failed to update Redis cache (Write failed).");
                 }
 
@@ -130,6 +138,7 @@ public class GrammarBootstrapService: IGrammarBootstrapService
             
 
             grammar = GrammarBuilder.Build(commands, prompts);
+            if (fallback) AxiTelemetry.Cache("grammar", "successful_fallback");
             _logger.LogInformation("Bootstrap: Grammar successfully initialized.");
 
             return grammar; 
@@ -140,6 +149,7 @@ public class GrammarBootstrapService: IGrammarBootstrapService
         }
         catch (Exception ex)
         {
+            if (ex is RedisException) AxiTelemetry.Failure("cache", "grammar");
             _logger.LogCritical(
                 ex,
                 "Bootstrap: CRITICAL FAILURE. Grammar could not be initialized."

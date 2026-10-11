@@ -4,9 +4,12 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <AxRuntimePath Condition="'$(AxRuntimePath)' == ''">$(MSBuildProjectDirectory)/../../ARMMICRO/AxPlugins/AxExtend</AxRuntimePath>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Versioning" Version="5.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Npgsql" Version="8.0.8" />
@@ -25,10 +28,10 @@
 
   <ItemGroup>
 	  <Reference Include="ARMCommon">
-      <HintPath>..\..\ARMMICRO\AxPlugins\AxExtend\ARMCommon.dll</HintPath>
+      <HintPath>$(AxRuntimePath)/ARMCommon.dll</HintPath>
     </Reference>
     <Reference Include="AxExtend">
-      <HintPath>..\..\ARMMICRO\AxPlugins\AxExtend\AxExtend.dll</HintPath>
+      <HintPath>$(AxRuntimePath)/AxExtend.dll</HintPath>
     </Reference>
     
   </ItemGroup>

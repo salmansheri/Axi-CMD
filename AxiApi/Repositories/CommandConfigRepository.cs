@@ -1,3 +1,4 @@
+using AxiApi.Observability;
 using ARMCommon.Model;
 using AxExtend.Interface;
 using AxiApi.DTOs;
@@ -25,12 +26,13 @@ namespace AxiApi.Repositories
 
         public async Task<List<CommandConfigDTO>> GetCommandConfigsAsync(string appname)
         {
+            using var operation = AxiTelemetry.BeginDatabase("command-config.load");
             _logger.LogInformation("GetCommandConfigsAsync called for appname: {AppName}", appname);
 
             var configs = new List<CommandConfigDTO>();
             string sql = SqlQueries.SelectActiveCommandConfigs;
 
-            var isDbConnected = await _axExtend.OpenDBConnectionAsync(appname);
+            var isDbConnected = await AxiTelemetry.DependencyAsync("database", "connect", () => _axExtend.OpenDBConnectionAsync(appname));
             if (!isDbConnected)
             {
                 _logger.LogError("Failed to open DB connection for appname: {AppName}", appname);
@@ -38,7 +40,7 @@ namespace AxiApi.Repositories
             }
 
             var db = await _axExtend.GetDB();
-            SQLResult sqlResult = await db.ExecuteSQLAsync(sql);
+            SQLResult sqlResult = await AxiTelemetry.DependencyAsync("database", "query", () => db.ExecuteSQLAsync(sql));
 
             if (!string.IsNullOrEmpty(sqlResult?.error))
             {
@@ -66,6 +68,7 @@ namespace AxiApi.Repositories
             }
 
             _logger.LogInformation("Loaded {Count} command configs for appname: {AppName}", configs.Count, appname);
+            operation.Complete();
             return configs;
         }
     }

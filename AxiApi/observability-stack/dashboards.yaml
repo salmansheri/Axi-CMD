@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: AxiApi
+    folder: AxiApi
+    type: file
+    disableDeletion: true
+    editable: false
+    options:
+      path: /otel-lgtm/grafana/conf/provisioning/dashboards/axiapi

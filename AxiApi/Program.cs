@@ -8,6 +8,7 @@ using ARMCommon.Helpers;
 using AxExtend.Interface;
 using AxiApi.Exceptions;
 using Serilog;
+using AxiApi.Observability;
 
 var configuration = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json")
@@ -33,6 +34,7 @@ try
 {
     Log.Information("Starting Axi Api...."); 
     var builder = WebApplication.CreateBuilder(args);
+    builder.Host.ConfigureServices((context, services) => services.AddAxiObservability(context.Configuration));
 builder.Services.AddScoped<IGrammarService, GrammarService>();
 //builder.Services.AddSingleton<IConnectionMultiplexer>(options =>
 //{
@@ -65,7 +67,17 @@ builder.Services.AddScoped<IKeyfieldRepository, KeyfieldRepository>();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails(); 
 
-builder.Host.UseSerilog();
+builder.Host.UseSerilog((context, services, logging) =>
+{
+    if (services.GetRequiredService<ObservabilityOptions>().Enabled)
+    {
+        logging.MinimumLevel.Verbose()
+            .WriteTo.Logger(local => local.ReadFrom.Configuration(context.Configuration));
+        logging.WriteTo.Sink(services.GetRequiredService<SafeOtelLogSink>());
+    }
+    else
+        logging.ReadFrom.Configuration(context.Configuration);
+});
 
 
 
@@ -104,6 +116,7 @@ builder.Services.AddHttpContextAccessor();
 
 
 var app = builder.Build();
+var observability = app.Services.GetRequiredService<ObservabilityOptions>();
 
 
 
@@ -116,6 +129,9 @@ if (app.Environment.IsDevelopment())
 
 
 
+app.UseRouting();
+if (observability.Enabled)
+    app.UseMiddleware<RequestTelemetryMiddleware>();
 app.UseExceptionHandler(); 
 
 app.UseHttpsRedirection();

@@ -1,3 +1,4 @@
+using AxiApi.Observability;
 using ARMCommon.Model;
 using AxExtend.Interface;
 using AxiApi.DTOs;
@@ -33,13 +34,14 @@ namespace AxiApi.Repositories
                 throw new ArgumentException("Username is required and cannot be empty.");
             }
             string username = requestDTO.Username.Trim();
+            using var operation = AxiTelemetry.BeginDatabase("keyfield.set");
 
             const int maxRetries = 3;
             for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
                 try
                 {
-                    var isDbConnected = await _axExtend.OpenDBConnectionAsync(appname);
+                    var isDbConnected = await AxiTelemetry.DependencyAsync("database", "connect", () => _axExtend.OpenDBConnectionAsync(appname));
                     if (!isDbConnected)
                     {
                         _logger.LogError("Failed to open DB connection for appname: {AppName} on attempt {Attempt}/{MaxRetries}", appname, attempt, maxRetries);
@@ -47,6 +49,7 @@ namespace AxiApi.Repositories
                         {
                             throw new DatabaseException($"Failed to connect to database for application: {appname}", "CONNECT");
                         }
+                        AxiTelemetry.Retry("keyfield.set");
                         await Task.Delay(200 * attempt);
                         continue;
                     }
@@ -59,7 +62,7 @@ namespace AxiApi.Repositories
                     DbType[] checkParamTypes = { DbType.String };
                     object[] checkParamValues = { transId.ToLower() };
 
-                    SQLResult checkResult = await db.ExecuteSQLAsync(checkSql, checkParamNames, checkParamTypes, checkParamValues);
+                    SQLResult checkResult = await AxiTelemetry.DependencyAsync("database", "query", () => db.ExecuteSQLAsync(checkSql, checkParamNames, checkParamTypes, checkParamValues));
 
                     if (!string.IsNullOrEmpty(checkResult?.error))
                     {
@@ -82,7 +85,7 @@ namespace AxiApi.Repositories
                         DbType[] updateParamTypes = { DbType.String, DbType.String, DbType.String };
                         object[] updateParamValues = { keyField, username, transId.ToLower() };
 
-                        nonQueryResult = await db.ExecuteNonQueryAsync(updateSql, updateParamNames, updateParamTypes, updateParamValues);
+                        nonQueryResult = await AxiTelemetry.DependencyAsync("database", "write", () => db.ExecuteNonQueryAsync(updateSql, updateParamNames, updateParamTypes, updateParamValues));
                     }
                     else
                     {
@@ -92,7 +95,7 @@ namespace AxiApi.Repositories
                         DbType[] insertParamTypes = { DbType.String, DbType.String, DbType.String };
                         object[] insertParamValues = { transId, keyField, username };
 
-                        nonQueryResult = await db.ExecuteNonQueryAsync(insertSql, insertParamNames, insertParamTypes, insertParamValues);
+                        nonQueryResult = await AxiTelemetry.DependencyAsync("database", "write", () => db.ExecuteNonQueryAsync(insertSql, insertParamNames, insertParamTypes, insertParamValues));
                     }
 
                     if (!string.IsNullOrEmpty(nonQueryResult?.error))
@@ -101,6 +104,7 @@ namespace AxiApi.Repositories
                         throw new DatabaseException(nonQueryResult.error, count > 0 ? "UPDATE" : "INSERT");
                     }
 
+                    operation.Complete();
                     return true;
                 }
                 catch (DatabaseException)
@@ -116,6 +120,7 @@ namespace AxiApi.Repositories
                         _logger.LogError(ex, "Exhausted all DB retry attempts for appname: {AppName}", appname);
                         throw;
                     }
+                    AxiTelemetry.Retry("keyfield.set");
                     await Task.Delay(250 * attempt);
                 }
             }

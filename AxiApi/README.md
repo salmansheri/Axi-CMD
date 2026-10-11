@@ -2,6 +2,8 @@
 
 Backend service layer powering the **AXI (Axpert Command Line Interface)** engine. AxiApi provides dynamic command resolution, command grammar bootstrapping, customizable user favorites, form keyfield configuration, multi-tenant database connectivity, and distributed Redis caching for the Axpert web shell.
 
+For optional local tracing, metrics, and logs with Grafana, Loki, Prometheus, and Tempo, see [Local observability](OBSERVABILITY.md).
+
 ---
 
 ## Architecture Overview

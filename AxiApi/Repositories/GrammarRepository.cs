@@ -1,3 +1,4 @@
+using AxiApi.Observability;
 using ARMCommon.Helpers;
 using ARMCommon.Model;
 using AxExtend.Interface; 
@@ -31,6 +32,7 @@ public class GrammarRepository : IGrammarRepository
 
     public async Task<(List<CommandNodeDTO>, List<PromptNodeDTO>)> LoadGrammerAsync(string appname)
     {
+        using var operation = AxiTelemetry.BeginDatabase("grammar.load");
 
         _logger.LogInformation("Load Grammar Called.....");
         _logger.LogInformation("Appname: " + appname);
@@ -75,7 +77,7 @@ public class GrammarRepository : IGrammarRepository
 
         var sqlType = DbUtils.GetSqlQueryType(sql);
 
-        var isDbConnected = await _axExtend.OpenDBConnectionAsync(appname);
+        var isDbConnected = await AxiTelemetry.DependencyAsync("database", "connect", () => _axExtend.OpenDBConnectionAsync(appname));
         
         if (isDbConnected)
         {
@@ -83,7 +85,7 @@ public class GrammarRepository : IGrammarRepository
 
            
 
-            sqlResult = await db.ExecuteSQLAsync(sql);
+            sqlResult = await AxiTelemetry.DependencyAsync("database", "query", () => db.ExecuteSQLAsync(sql));
 
 
         }
@@ -141,6 +143,7 @@ public class GrammarRepository : IGrammarRepository
         Console.WriteLine("Prompts: " + JsonConvert.SerializeObject(prompts));
 
 
+        operation.Complete(isDbConnected && string.IsNullOrEmpty(sqlResult?.error));
         return (commands, prompts);
     }
 

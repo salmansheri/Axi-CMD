@@ -1,0 +1,24 @@
+name: axiapi-observability
+services:
+  lgtm:
+    image: grafana/otel-lgtm:0.36.0@sha256:57c04cbd8e7022f32bb84c4ac005d79baf8b08e2c5be44facf11f5f1f9944ba2
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:4318:4318"
+    environment:
+      ENABLE_LOGS_OTELCOL: "true"
+      ENABLE_LOGS_LOKI: "true"
+      ENABLE_LOGS_TEMPO: "true"
+      PROMETHEUS_EXTRA_ARGS: --storage.tsdb.retention.time=3d
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /otel-lgtm/grafana/conf/provisioning/dashboards/axiapi/axiapi.json
+    volumes:
+      - telemetry:/data
+      - ./collector.yaml:/otel-lgtm/otelcol-config.yaml:ro,Z
+      - ./loki.yaml:/otel-lgtm/loki-config.yaml:ro,Z
+      - ./tempo.yaml:/otel-lgtm/tempo-config.yaml:ro,Z
+      - ./datasources.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/grafana-datasources.yaml:ro,Z
+      - ./dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/axiapi.yaml:ro,Z
+      - ./axiapi.json:/otel-lgtm/grafana/conf/provisioning/dashboards/axiapi/axiapi.json:ro,Z
+    stop_grace_period: 30s
+volumes:
+  telemetry:

@@ -1,4 +1,5 @@
-﻿using ARMCommon.Model;
+using AxiApi.Observability;
+using ARMCommon.Model;
 using AxExtend.Interface;
 using AxiApi.DTOs;
 using AxiApi.Exceptions;
@@ -23,6 +24,7 @@ namespace AxiApi.Repositories
 
         public async Task<List<UserFavouritesDTO>> CreateUserFavourites(UserFavouritesDTO userFavouritesDTO, string appname)
         {
+            using var operation = AxiTelemetry.BeginDatabase("favourites.create");
             // userFavouritesDTO.FavouritesId = Guid.NewGuid();
             string sqlQuery = "INSERT INTO Axi_UserFavourites\r\n(username, commandtext,originalcommandtext, favorder, targeturl)\r\nVALUES\r\n(:username, :commandtext,:originalcommandtext, :favorder, :targeturl);";
 
@@ -40,19 +42,19 @@ namespace AxiApi.Repositories
             SQLResult sqlResult = new(); 
             
 
-            var isDbConnected = await _axExtend.OpenDBConnectionAsync(appname);
+            var isDbConnected = await AxiTelemetry.DependencyAsync("database", "connect", () => _axExtend.OpenDBConnectionAsync(appname));
 
             if (isDbConnected)
             {
                 var db = await _axExtend.GetDB();
 
-                nonQueryResult = await db.ExecuteNonQueryAsync(sqlQuery, paramNames, paramTypes, paramValues);
+                nonQueryResult = await AxiTelemetry.DependencyAsync("database", "write", () => db.ExecuteNonQueryAsync(sqlQuery, paramNames, paramTypes, paramValues));
                   if (!string.IsNullOrEmpty(nonQueryResult?.error))
                         {
                            throw new DatabaseException(nonQueryResult.error,"INSERT");
 
                         }
-                sqlResult = await db.ExecuteSQLAsync(selectSqlQuery,selectParamNames, selectParamTypes, selectParamValues); 
+                sqlResult = await AxiTelemetry.DependencyAsync("database", "query", () => db.ExecuteSQLAsync(selectSqlQuery,selectParamNames, selectParamTypes, selectParamValues));
 
                  if (!string.IsNullOrEmpty(sqlResult?.error))
                         {
@@ -87,7 +89,8 @@ namespace AxiApi.Repositories
                 }
             }
 
-            return userFavouritesDTOs; 
+            operation.Complete(isDbConnected);
+            return userFavouritesDTOs;
 
 
 
@@ -96,6 +99,7 @@ namespace AxiApi.Repositories
 
         public async Task<NonQueryResult> DeleteUserFavouritesByCmd(UserFavouritesDTO userFavouritesDTO, string appname)
         {
+            using var operation = AxiTelemetry.BeginDatabase("favourites.delete");
             string sqlQuery = "DELETE FROM Axi_UserFavourites WHERE username = :username AND commandtext = :commandtext;";
 
             string[] paramNames = { ":username", ":commandtext" };
@@ -105,23 +109,25 @@ namespace AxiApi.Repositories
             NonQueryResult sqlResult = new();
 
 
-            var isDbConnected = await _axExtend.OpenDBConnectionAsync(appname);
+            var isDbConnected = await AxiTelemetry.DependencyAsync("database", "connect", () => _axExtend.OpenDBConnectionAsync(appname));
 
             if (isDbConnected)
             {
                 var db = await _axExtend.GetDB();
 
-                sqlResult = await db.ExecuteNonQueryAsync(sqlQuery, paramNames, paramTypes, paramValues);
+                sqlResult = await AxiTelemetry.DependencyAsync("database", "write", () => db.ExecuteNonQueryAsync(sqlQuery, paramNames, paramTypes, paramValues));
 
 
             }
 
+            operation.Complete(isDbConnected && string.IsNullOrEmpty(sqlResult?.error));
             return sqlResult;
 
         }
 
         public async Task<List<UserFavouritesDTO>> GetUserFavouritesByUsername(string username, string appname)
         {
+            using var operation = AxiTelemetry.BeginDatabase("favourites.load");
             string sqlQuery = "SELECT * FROM Axi_UserFavourites WHERE username = :username ORDER BY createdon DESC";
 
             string[] paramNames = { ":username" };
@@ -131,7 +137,7 @@ namespace AxiApi.Repositories
             SQLResult sqlResult = new();
             List<UserFavouritesDTO> favouritesDTOs = new(); 
 
-            var isDbConnected = await _axExtend.OpenDBConnectionAsync(appname); 
+            var isDbConnected = await AxiTelemetry.DependencyAsync("database", "connect", () => _axExtend.OpenDBConnectionAsync(appname));
 
             if (isDbConnected)
             {
@@ -139,7 +145,7 @@ namespace AxiApi.Repositories
 
 
 
-                sqlResult = await db.ExecuteSQLAsync(sqlQuery, paramNames, paramTypes, paramValues);
+                sqlResult = await AxiTelemetry.DependencyAsync("database", "query", () => db.ExecuteSQLAsync(sqlQuery, paramNames, paramTypes, paramValues));
             }
 
 
@@ -163,7 +169,8 @@ namespace AxiApi.Repositories
                 }
             }
 
-            return favouritesDTOs; 
+            operation.Complete(isDbConnected && string.IsNullOrEmpty(sqlResult?.error));
+            return favouritesDTOs;
 
 
 
@@ -171,6 +178,7 @@ namespace AxiApi.Repositories
 
         public async Task<NonQueryResult> UpdateUserFavourties(string favouritesId, string appname, string commandText)
         {
+            using var operation = AxiTelemetry.BeginDatabase("favourites.update");
 
             // string sqlQuery = "UPDATE Axi_UserFavourites SET commandtext = :commandtext WHERE id = :favouritesid;";
             string sqlQuery = $"UPDATE Axi_UserFavourites SET commandtext = '{commandText}' WHERE id = '{favouritesId}'";
@@ -182,18 +190,19 @@ namespace AxiApi.Repositories
             NonQueryResult sqlResult = new();
 
 
-            var isDbConnected = await _axExtend.OpenDBConnectionAsync(appname);
+            var isDbConnected = await AxiTelemetry.DependencyAsync("database", "connect", () => _axExtend.OpenDBConnectionAsync(appname));
 
             if (isDbConnected)
             {
                 var db = await _axExtend.GetDB();
 
                 // sqlResult = await db.ExecuteNonQueryAsync(sqlQuery, paramNames, paramTypes, paramValues);
-                sqlResult = await db.ExecuteNonQueryAsync(sqlQuery);
+                sqlResult = await AxiTelemetry.DependencyAsync("database", "write", () => db.ExecuteNonQueryAsync(sqlQuery));
 
 
             }
 
+            operation.Complete(isDbConnected && string.IsNullOrEmpty(sqlResult?.error));
             return sqlResult;
 
 

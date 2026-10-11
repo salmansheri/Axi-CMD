@@ -8,6 +8,9 @@
 AxiApi/bin/
 AxiApi/obj/
 AxiApi/logs/
+AxiApi.Tests/bin/
+AxiApi.Tests/obj/
+TestResults/
 *.user
 *.lscache
 /AxpertPlugins/AxiCMD/docs/.obsidian

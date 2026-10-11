@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Diagnostics;
 using Newtonsoft.Json;
 using System.Net;
 using Npgsql; 
+using AxiApi.Observability;
+using StackExchange.Redis;
 
 
 namespace AxiApi.Exceptions
@@ -18,6 +20,8 @@ namespace AxiApi.Exceptions
 
         public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
         {
+            if (exception is RedisCacheConnectionException or RedisException)
+                AxiTelemetry.Failure("cache", "request");
             _logger.LogError(exception, "Unhandled exception occured");
 
             HttpStatusCode statusCode;
